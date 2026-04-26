@@ -1,0 +1,85 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL ───────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: diprom_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: diprom_scan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── MongoDB ──────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    container_name: diprom_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend ──────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diprom_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/diprom_scan
+      MONGODB_URI: mongodb://mongo:27017/diprom_logs
+      JWT_SECRET: change_this_to_a_very_long_random_string_in_production
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:3000
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_PORT: 587
+      EMAIL_USER: your_email@gmail.com
+      EMAIL_PASS: your_app_password
+      AES_SECRET: your_aes_256_secret_key_32_chars!!
+    ports:
+      - "5000:5000"
+    volumes:
+      - uploads_data:/app/uploads
+
+  # ─── Frontend ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diprom_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:5000/api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  mongo_data:
+  uploads_data:

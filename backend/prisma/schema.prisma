@@ -1,0 +1,123 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  VISITOR
+  STAFF
+  ADMIN
+  EXECUTIVE
+}
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  DISPOSED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  password    String
+  role        Role     @default(STAFF)
+  department  String?
+  phone       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  audits      Audit[]
+  otpCodes    OtpCode[]
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  assets      Asset[]
+}
+
+model Location {
+  id          String   @id @default(uuid())
+  name        String
+  building    String?
+  floor       String?
+  room        String?
+  createdAt   DateTime @default(now())
+
+  assets      Asset[]
+}
+
+model Asset {
+  id            String      @id @default(uuid())
+  code          String      @unique  // QR Code content
+  name          String
+  description   String?
+  serialNumber  String?
+  brand         String?
+  model         String?
+  price         Float?
+  purchaseDate  DateTime?
+  status        AssetStatus @default(ACTIVE)
+  imageUrl      String?
+  qrCodeUrl     String?
+
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id])
+
+  locationId    String?
+  location      Location?   @relation(fields: [locationId], references: [id])
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  auditItems    AuditItem[]
+}
+
+model Audit {
+  id          String      @id @default(uuid())
+  title       String
+  description String?
+  startDate   DateTime    @default(now())
+  endDate     DateTime?
+  isCompleted Boolean     @default(false)
+
+  createdById String
+  createdBy   User        @relation(fields: [createdById], references: [id])
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  auditItems  AuditItem[]
+}
+
+model AuditItem {
+  id        String   @id @default(uuid())
+  auditId   String
+  audit     Audit    @relation(fields: [auditId], references: [id])
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  found     Boolean  @default(false)
+  note      String?
+  scannedAt DateTime @default(now())
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
