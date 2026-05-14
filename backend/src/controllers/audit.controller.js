@@ -87,4 +87,28 @@ const completeAudit = async (req, res) => {
   }
 };
 
-module.exports = { getAudits, getAuditById, createAudit, scanAssetInAudit, completeAudit };
+// DELETE /api/audits/:id
+const deleteAudit = async (req, res) => {
+  try {
+    await prisma.auditItem.deleteMany({ where: { auditId: req.params.id } });
+    await prisma.audit.delete({ where: { id: req.params.id } });
+    await Log.create({ userId: req.user.id, action: "DELETE_AUDIT", target: req.params.id, ip: req.ip });
+    res.json({ message: "ลบการตรวจนับสำเร็จ" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// DELETE /api/audits/:id/items/:itemId
+const deleteAuditItem = async (req, res) => {
+  try {
+    await prisma.auditItem.delete({ where: { id: req.params.itemId } });
+    await Log.create({ userId: req.user.id, action: "DELETE_AUDIT_ITEM", target: req.params.itemId, ip: req.ip });
+    res.json({ message: "ลบรายการสำเร็จ" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+module.exports = { getAudits, getAuditById, createAudit, scanAssetInAudit, completeAudit, deleteAudit, deleteAuditItem };
+
