@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import { useSearchParams } from "next/navigation";
 
 const STATUS_COLORS: Record<string, string> = { ACTIVE: "text-green-600", INACTIVE: "text-gray-500", MAINTENANCE: "text-yellow-600", DISPOSED: "text-red-600" };
 const STATUS_LABELS: Record<string, string> = { ACTIVE: "ใช้งานอยู่", INACTIVE: "ไม่ใช้งาน", MAINTENANCE: "ซ่อมบำรุง", DISPOSED: "ตัดจำหน่ายแล้ว" };
@@ -14,6 +15,12 @@ export default function ScannerPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const [manualCode, setManualCode] = useState("");
+  const searchParams = useSearchParams();
+  const codeFromUrl = searchParams.get("code");
+
+useEffect(() => {
+  if (codeFromUrl) lookupAsset(codeFromUrl);
+}, [codeFromUrl]);
 
   const startScanner = () => {
     if (scannerRef.current) return;

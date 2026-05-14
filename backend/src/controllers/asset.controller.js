@@ -82,7 +82,8 @@ const createAsset = async (req, res) => {
     const qrDir = path.join(__dirname, "../../uploads/qrcodes");
     if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
     const qrPath = path.join(qrDir, `${code}.png`);
-    await QRCode.toFile(qrPath, code, { width: 300 });
+    const BASE_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+    await QRCode.toFile(qrPath, `${BASE_URL}/scan?code=${code}`, { width: 300 });
     const qrCodeUrl = `/uploads/qrcodes/${code}.png`;
 
     const asset = await prisma.asset.create({
