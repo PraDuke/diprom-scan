@@ -57,9 +57,23 @@ export default function AuditDetailPage() {
     } catch { toast.error("เกิดข้อผิดพลาด"); }
   };
 
-  const handleExportPDF = () => {
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/reports/audit/${id}/pdf`, "_blank");
-  };
+  const handleExportPDF = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/audit/${id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) { toast.error("Export ไม่สำเร็จ"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("ดาวน์โหลด PDF แล้ว");
+    } catch { toast.error("เกิดข้อผิดพลาด"); }
+};
 
   useEffect(() => () => { scannerRef.current?.clear().catch(() => {}); }, []);
 
