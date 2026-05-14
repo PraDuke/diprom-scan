@@ -1,16 +1,16 @@
 "use client";
-// src/app/dashboard/assets/page.tsx
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import toast from "react-hot-toast";
-import Image from "next/image";
 
 const STATUS_LABELS: Record<string, string> = { ACTIVE: "ใช้งาน", INACTIVE: "ไม่ใช้งาน", MAINTENANCE: "ซ่อมบำรุง", DISPOSED: "ตัดจำหน่าย" };
 const STATUS_COLORS: Record<string, string> = { ACTIVE: "bg-green-100 text-green-800", INACTIVE: "bg-gray-100 text-gray-600", MAINTENANCE: "bg-yellow-100 text-yellow-800", DISPOSED: "bg-red-100 text-red-800" };
 
 export default function AssetsPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [assets, setAssets] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -21,6 +21,7 @@ export default function AssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchAssets = async () => {
     setLoading(true);
@@ -38,11 +39,12 @@ export default function AssetsPage() {
     api.get("/locations").then(({ data }) => setLocations(data));
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("ต้องการลบครุภัณฑ์นี้?")) return;
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/assets/${id}`);
+      await api.delete(`/assets/${deleteId}`);
       toast.success("ลบแล้ว");
+      setDeleteId(null);
       fetchAssets();
     } catch { toast.error("ลบไม่สำเร็จ"); }
   };
@@ -54,17 +56,23 @@ export default function AssetsPage() {
           <h1 className="text-2xl font-bold text-gray-900">ครุภัณฑ์ทั้งหมด</h1>
           <p className="text-gray-500 text-sm mt-1">รวม {total} รายการ</p>
         </div>
-        {user?.role === "ADMIN" && (
-          <button onClick={() => { setSelectedAsset(null); setShowModal(true); }} className="btn-primary flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            เพิ่มครุภัณฑ์
+        <div className="flex gap-2">
+          <button onClick={() => router.push("/dashboard/assets/qr")}
+            className="btn-secondary flex items-center gap-2">
+            🖨️ พิมพ์ QR
           </button>
-        )}
+          {user?.role === "ADMIN" && (
+            <button onClick={() => { setSelectedAsset(null); setShowModal(true); }}
+              className="btn-primary flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              เพิ่มครุภัณฑ์
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 mb-6">
         <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="input max-w-xs" placeholder="🔍 ค้นหาครุภัณฑ์..." />
@@ -74,7 +82,6 @@ export default function AssetsPage() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -114,7 +121,7 @@ export default function AssetsPage() {
                       <div className="flex gap-2 justify-end">
                         <button onClick={() => { setSelectedAsset(asset); setShowModal(true); }}
                           className="text-blue-600 hover:text-blue-800 text-xs font-medium">แก้ไข</button>
-                        <button onClick={() => handleDelete(asset.id)}
+                        <button onClick={() => setDeleteId(asset.id)}
                           className="text-red-500 hover:text-red-700 text-xs font-medium">ลบ</button>
                       </div>
                     )}
@@ -124,7 +131,6 @@ export default function AssetsPage() {
             </tbody>
           </table>
         </div>
-        {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-sm text-gray-500">แสดง {assets.length} จาก {total} รายการ</p>
           <div className="flex gap-2">
@@ -136,7 +142,6 @@ export default function AssetsPage() {
         </div>
       </div>
 
-      {/* Asset Modal */}
       {showModal && (
         <AssetModal
           asset={selectedAsset}
@@ -145,6 +150,23 @@ export default function AssetsPage() {
           onClose={() => setShowModal(false)}
           onSave={() => { setShowModal(false); fetchAssets(); }}
         />
+      )}
+
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center">
+            <div className="text-5xl mb-4">🗑️</div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">ยืนยันการลบ</h3>
+            <p className="text-gray-500 text-sm mb-6">ต้องการลบครุภัณฑ์นี้ใช่ไหม? ไม่สามารถกู้คืนได้</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">ยกเลิก</button>
+              <button onClick={confirmDelete}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium">
+                ลบเลย
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
