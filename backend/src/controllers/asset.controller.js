@@ -74,11 +74,14 @@ const getAssetByCode = async (req, res) => {
 // POST /api/assets
 const createAsset = async (req, res) => {
   try {
-    const { name, description, serialNumber, brand, model, price, purchaseDate, categoryId, locationId } = req.body;
+    const {
+      name, description, serialNumber, brand, model,
+      price, purchaseDate, categoryId, locationId,
+      assignedTo, assignedPhone, assignedNote
+    } = req.body;
 
     const code = `DIPROM-${uuidv4().slice(0, 8).toUpperCase()}`;
 
-    // Generate QR Code image
     const qrDir = path.join(__dirname, "../../uploads/qrcodes");
     if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
     const qrPath = path.join(qrDir, `${code}.png`);
@@ -92,6 +95,9 @@ const createAsset = async (req, res) => {
         price: price ? parseFloat(price) : null,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
         qrCodeUrl, categoryId, locationId,
+        assignedTo: assignedTo || null,
+        assignedPhone: assignedPhone || null,
+        assignedNote: assignedNote || null,
         imageUrl: req.file ? `/uploads/assets/${req.file.filename}` : null,
       },
       include: { category: true, location: true },
@@ -107,13 +113,21 @@ const createAsset = async (req, res) => {
 // PUT /api/assets/:id
 const updateAsset = async (req, res) => {
   try {
-    const { name, description, serialNumber, brand, model, price, purchaseDate, status, categoryId, locationId } = req.body;
+    const {
+      name, description, serialNumber, brand, model,
+      price, purchaseDate, status, categoryId, locationId,
+      assignedTo, assignedPhone, assignedNote
+    } = req.body;
+
     const asset = await prisma.asset.update({
       where: { id: req.params.id },
       data: {
         name, description, serialNumber, brand, model, status, categoryId, locationId,
         price: price ? parseFloat(price) : undefined,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : undefined,
+        assignedTo: assignedTo || null,
+        assignedPhone: assignedPhone || null,
+        assignedNote: assignedNote || null,
         ...(req.file && { imageUrl: `/uploads/assets/${req.file.filename}` }),
       },
       include: { category: true, location: true },

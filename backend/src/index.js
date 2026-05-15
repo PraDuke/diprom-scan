@@ -27,6 +27,13 @@ app.use(cors({ origin: "*", credentials: false }));
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+const fs = require("fs");
+
+// สร้าง folders ถ้ายังไม่มี
+["uploads/qrcodes", "uploads/assets", "uploads/audit-items"].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
 app.use("/uploads", (req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   next();

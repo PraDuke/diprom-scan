@@ -36,6 +36,7 @@ model User {
 
   audits      Audit[]
   otpCodes    OtpCode[]
+  auditAssignees AuditAssignee[]
 }
 
 model Category {
@@ -60,7 +61,7 @@ model Location {
 
 model Asset {
   id            String      @id @default(uuid())
-  code          String      @unique  // QR Code content
+  code          String      @unique
   name          String
   description   String?
   serialNumber  String?
@@ -71,6 +72,11 @@ model Asset {
   status        AssetStatus @default(ACTIVE)
   imageUrl      String?
   qrCodeUrl     String?
+
+  // เพิ่มใหม่
+  assignedTo    String?     // ชื่อผู้ถือครอง
+  assignedPhone String?     // เบอร์โทรผู้ถือครอง
+  assignedNote  String?     // หมายเหตุการมอบหมาย
 
   categoryId    String?
   category      Category?   @relation(fields: [categoryId], references: [id])
@@ -95,21 +101,37 @@ model Audit {
   createdById String
   createdBy   User        @relation(fields: [createdById], references: [id])
 
+  // เพิ่มใหม่ — ผู้รับผิดชอบตรวจนับ
+  assignedUsers AuditAssignee[]
+
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   auditItems  AuditItem[]
 }
 
+model AuditAssignee {
+  id      String @id @default(uuid())
+  auditId String
+  audit   Audit  @relation(fields: [auditId], references: [id])
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+
+  @@unique([auditId, userId])
+}
+
 model AuditItem {
-  id        String   @id @default(uuid())
-  auditId   String
-  audit     Audit    @relation(fields: [auditId], references: [id])
-  assetId   String
-  asset     Asset    @relation(fields: [assetId], references: [id])
-  found     Boolean  @default(false)
-  note      String?
-  scannedAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  auditId     String
+  audit       Audit    @relation(fields: [auditId], references: [id])
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id])
+  found       Boolean  @default(false)
+  note        String?
+  condition   String?  // สภาพ: ดี, ชำรุด, สูญหาย
+  imageUrl    String?  // รูปถ่ายตอนตรวจนับ
+  scannedAt   DateTime @default(now())
+  scannedById String?  // ใครสแกน
 }
 
 model OtpCode {
