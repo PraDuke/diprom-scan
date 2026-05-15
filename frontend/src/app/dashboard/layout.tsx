@@ -1,6 +1,5 @@
 "use client";
-// src/app/dashboard/layout.tsx
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/lib/store";
@@ -12,22 +11,18 @@ const navItems = [
   { href: "/dashboard/scanner", label: "สแกน QR", icon: "M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" },
   { href: "/dashboard/audits", label: "ตรวจนับ", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" },
   { href: "/dashboard/reports", label: "รายงาน", icon: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-  { href: "/dashboard/admin", label: "จัดการระบบ", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z", adminOnly: true },
+  { href: "/dashboard/admin", label: "จัดการ", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z", adminOnly: true },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, token, init, logout } = useAuthStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  useEffect(() => { init(); }, []);
   useEffect(() => {
-    init();
-  }, []);
-
-  useEffect(() => {
-    if (!localStorage.getItem("token")) {
-      router.push("/auth/login");
-    }
+    if (!localStorage.getItem("token")) router.push("/auth/login");
   }, []);
 
   const handleLogout = () => {
@@ -38,17 +33,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const filteredNav = navItems.filter(item => !item.adminOnly || user?.role === "ADMIN");
 
+  const NavIcon = ({ d }: { d: string }) => (
+    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={d} />
+    </svg>
+  );
+
   return (
     <div className="flex h-screen bg-surface overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-blue-900 text-white flex flex-col flex-shrink-0">
+
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar — ซ่อนบนมือถือ แสดงบน desktop */}
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-50
+        w-64 bg-blue-900 text-white flex flex-col flex-shrink-0
+        transform transition-transform duration-200
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        md:translate-x-0
+      `}>
         {/* Logo */}
         <div className="p-6 border-b border-blue-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
+              <NavIcon d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
             </div>
             <div>
               <p className="font-bold text-sm">DIPROM Scan</p>
@@ -63,12 +74,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             const active = pathname === item.href;
             return (
               <Link key={item.href} href={item.href}
+                onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   active ? "bg-blue-700 text-white" : "text-blue-200 hover:bg-blue-800 hover:text-white"
                 }`}>
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} />
-                </svg>
+                <NavIcon d={item.icon} />
                 {item.label}
               </Link>
             );
@@ -86,7 +96,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-blue-300 text-xs truncate">{user?.role}</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="w-full text-left text-blue-300 hover:text-white text-sm flex items-center gap-2 px-2 py-1.5 rounded hover:bg-blue-800 transition-colors">
+          <button onClick={handleLogout}
+            className="w-full text-left text-blue-300 hover:text-white text-sm flex items-center gap-2 px-2 py-1.5 rounded hover:bg-blue-800 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
@@ -95,10 +106,57 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      {/* Main */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+
+        {/* Mobile Top Bar */}
+        <header className="md:hidden bg-blue-900 text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
+          <button onClick={() => setSidebarOpen(true)} className="p-1">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <p className="font-bold text-sm">DIPROM Scan</p>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+          {children}
+        </main>
+
+        {/* Bottom Navigation — แสดงเฉพาะมือถือ */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30">
+          <div className="flex items-center justify-around px-2 py-1">
+            {filteredNav.slice(0, 5).map((item) => {
+              const active = pathname === item.href;
+              const isScanner = item.href === "/dashboard/scanner";
+              return (
+                <Link key={item.href} href={item.href}
+                  className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-colors relative ${
+                    active ? "text-blue-600" : "text-gray-400"
+                  }`}>
+                  {/* ปุ่มสแกนใหญ่พิเศษ */}
+                  {isScanner ? (
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center -mt-5 shadow-lg ${
+                      active ? "bg-blue-600" : "bg-blue-500"
+                    }`}>
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} />
+                      </svg>
+                    </div>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} />
+                    </svg>
+                  )}
+                  <span className={`text-xs ${isScanner ? "mt-0" : ""}`}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+      </div>
     </div>
   );
 }
