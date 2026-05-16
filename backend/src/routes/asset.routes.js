@@ -11,6 +11,25 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
+// ✅ Public route — ไม่ต้อง Login (สำหรับคนภายนอกสแกน QR)
+router.get("/public/scan/:code", async (req, res) => {
+  const { PrismaClient } = require("@prisma/client");
+  const prisma = new PrismaClient();
+  try {
+    const asset = await prisma.asset.findUnique({
+      where: { code: req.params.code },
+      include: { category: true, location: true },
+    });
+    if (!asset) return res.status(404).json({ message: "ไม่พบครุภัณฑ์" });
+    // ซ่อนข้อมูลที่ไม่ควรแสดงแก่คนภายนอก
+    const { price, serialNumber, ...publicData } = asset;
+    res.json(publicData);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// 🔒 Protected routes — ต้อง Login
 router.use(authenticate);
 router.get("/", getAssets);
 router.get("/scan/:code", getAssetByCode);

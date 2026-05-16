@@ -5,10 +5,6 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { useSearchParams } from "next/navigation";
 
-const STATUS_COLORS: Record<string, string> = {
-  ACTIVE: "text-green-600", INACTIVE: "text-gray-500",
-  MAINTENANCE: "text-yellow-600", DISPOSED: "text-red-600"
-};
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "ใช้งานอยู่", INACTIVE: "ไม่ใช้งาน",
   MAINTENANCE: "ซ่อมบำรุง", DISPOSED: "ตัดจำหน่ายแล้ว"
@@ -20,14 +16,16 @@ export default function ScannerPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const [manualCode, setManualCode] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+useEffect(() => {
+  const ua = navigator.userAgent;
+  const mobile = /iPhone|iPad|iPod|Android/i.test(ua) &&
+    !/Windows NT|Macintosh|Linux x86/i.test(ua) &&
+    window.innerWidth < 768;
+  setIsMobile(mobile);
+}, []);
   const searchParams = useSearchParams();
   const codeFromUrl = searchParams.get("code");
-
-  const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-  setIsMobile(/iPhone|iPad|Android/i.test(navigator.userAgent));
-}, []);
 
   const lookupAsset = async (code: string) => {
     try {
@@ -66,19 +64,33 @@ export default function ScannerPage() {
     setScanning(false);
   };
 
-  const handleMobileCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const { Html5Qrcode } = await import("html5-qrcode");
-    const scanner = new Html5Qrcode("qr-file-reader");
     try {
-      const result = await scanner.scanFile(file, true);
-      const code = result.includes("?code=") ? result.split("?code=")[1] : result;
+      const img = new window.Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise(resolve => { img.onload = resolve; });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(img.src);
+      const jsQR = (await import("jsqr")).default;
+      const qrResult = jsQR(imageData.data, imageData.width, imageData.height);
+      if (!qrResult) {
+        toast.error("อ่าน QR ไม่ได้ ลองใช้รูปที่ชัดขึ้น");
+        e.target.value = "";
+        return;
+      }
+      const qrValue = qrResult.data;
+      const code = qrValue.includes("?code=") ? qrValue.split("?code=")[1] : qrValue;
       await lookupAsset(code);
     } catch {
-      toast.error("อ่าน QR Code ไม่ได้ ลองใหม่อีกครั้ง");
+      toast.error("เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
     }
-    await scanner.clear();
     e.target.value = "";
   };
 
@@ -105,33 +117,40 @@ export default function ScannerPage() {
             <button onClick={stopScanner} className="btn-secondary w-full mt-4">หยุดสแกน</button>
           </div>
         ) : (
-          <div className="text-center py-8">
-            <div className="w-24 h-24 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-12 h-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="text-center py-6">
+            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
               </svg>
             </div>
-            <p className="text-gray-600 mb-4">
-              {isMobile ? "ถ่ายรูป QR Code เพื่อสแกน" : "กดปุ่มเพื่อเปิดกล้องสแกน"}
-            </p>
+            <p className="text-gray-500 text-sm mb-4">เลือกวิธีสแกน QR Code</p>
 
-            {isMobile ? (
-              <label className="btn-primary px-8 py-3 cursor-pointer inline-block">
-                📷 ถ่ายรูป QR Code
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleMobileCapture}
-                />
-              </label>
-            ) : (
-              <button onClick={startScanner} className="btn-primary px-8 py-3">
-                เปิดกล้องสแกน
-              </button>
-            )}
-            <div id="qr-file-reader" className="hidden" />
+            <div className="flex flex-col gap-3 max-w-xs mx-auto">
+              {/* ปุ่ม 1 — อัปโหลด/ถ่ายรูป */}
+              <>
+  <button
+    type="button"
+    className="btn-primary py-3 cursor-pointer w-full text-center block"
+    onClick={() => document.getElementById("file-input")?.click()}
+  >
+    📁 อัปโหลด / ถ่ายรูป QR Code
+  </button>
+  <input
+    id="file-input"
+    type="file"
+    accept="image/*"
+    className="hidden"
+    onChange={handleFileCapture}
+  />
+</>
+
+              {/* ปุ่ม 2 — เปิดกล้อง Webcam เฉพาะคอม */}
+{!isMobile && (
+  <button onClick={startScanner} className="btn-secondary py-3 w-full">
+    🎥 เปิดกล้อง Webcam
+  </button>
+)}
+            </div>
           </div>
         )}
       </div>
@@ -155,96 +174,85 @@ export default function ScannerPage() {
 
       {/* Result */}
       {result && (
-  <div className="card border-2 border-primary mb-6">
-    {/* Header */}
-    <div className="flex items-start justify-between mb-4">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">{result.name}</h2>
-        <p className="font-mono text-sm text-gray-400">{result.code}</p>
-      </div>
-      <span className={`badge text-sm px-3 py-1 rounded-full font-medium ${
-        result.status === "ACTIVE" ? "bg-green-100 text-green-700" :
-        result.status === "MAINTENANCE" ? "bg-yellow-100 text-yellow-700" :
-        result.status === "DISPOSED" ? "bg-red-100 text-red-700" :
-        "bg-gray-100 text-gray-600"
-      }`}>
-        {STATUS_LABELS[result.status]}
-      </span>
-    </div>
+        <div className="card border-2 border-primary mb-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">{result.name}</h2>
+              <p className="font-mono text-sm text-gray-400">{result.code}</p>
+            </div>
+            <span className={`badge text-sm px-3 py-1 rounded-full font-medium ${
+              result.status === "ACTIVE" ? "bg-green-100 text-green-700" :
+              result.status === "MAINTENANCE" ? "bg-yellow-100 text-yellow-700" :
+              result.status === "DISPOSED" ? "bg-red-100 text-red-700" :
+              "bg-gray-100 text-gray-600"
+            }`}>
+              {STATUS_LABELS[result.status]}
+            </span>
+          </div>
 
-    {/* QR Code */}
-    {result.qrCodeUrl && (
-      <div className="flex justify-center mb-4">
-        <img
-          src={`${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "")}${result.qrCodeUrl}`}
-          alt="QR" className="w-24 h-24 border rounded-xl"
-        />
-      </div>
-    )}
+          {result.qrCodeUrl && (
+            <div className="flex justify-center mb-4">
+              <img src={`${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "")}${result.qrCodeUrl}`}
+                alt="QR" className="w-24 h-24 border rounded-xl" />
+            </div>
+          )}
 
-    {/* รายละเอียด */}
-    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-      <div className="bg-gray-50 rounded-xl p-3 col-span-2">
-        <p className="text-gray-400 text-xs mb-1">ชื่อครุภัณฑ์</p>
-        <p className="font-medium text-gray-900">{result.name}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">หมวดหมู่</p>
-        <p className="font-medium text-gray-900">{result.category?.name || "-"}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">ที่ตั้ง</p>
-        <p className="font-medium text-gray-900">{result.location?.name || "-"}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">ยี่ห้อ</p>
-        <p className="font-medium text-gray-900">{result.brand || "-"}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">รุ่น</p>
-        <p className="font-medium text-gray-900">{result.model || "-"}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">หมายเลขซีเรียล</p>
-        <p className="font-medium text-gray-900">{result.serialNumber || "-"}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">ราคา</p>
-        <p className="font-medium text-gray-900">
-          {result.price ? `฿${Number(result.price).toLocaleString()}` : "-"}
-        </p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3">
-        <p className="text-gray-400 text-xs mb-1">วันที่ซื้อ</p>
-        <p className="font-medium text-gray-900">
-          {result.purchaseDate
-            ? new Date(result.purchaseDate).toLocaleDateString("th-TH")
-            : "-"}
-        </p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-3 col-span-2">
-        <p className="text-gray-400 text-xs mb-1">วันที่เพิ่มเข้าระบบ</p>
-        <p className="font-medium text-gray-900">
-          {new Date(result.createdAt).toLocaleDateString("th-TH")}
-        </p>
-      </div>
-      {result.description && (
-        <div className="bg-gray-50 rounded-xl p-3 col-span-2">
-          <p className="text-gray-400 text-xs mb-1">รายละเอียด</p>
-          <p className="font-medium text-gray-900">{result.description}</p>
+          <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+            <div className="bg-gray-50 rounded-xl p-3 col-span-2">
+              <p className="text-gray-400 text-xs mb-1">ชื่อครุภัณฑ์</p>
+              <p className="font-medium text-gray-900">{result.name}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">หมวดหมู่</p>
+              <p className="font-medium text-gray-900">{result.category?.name || "-"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">ที่ตั้ง</p>
+              <p className="font-medium text-gray-900">{result.location?.name || "-"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">ยี่ห้อ</p>
+              <p className="font-medium text-gray-900">{result.brand || "-"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">รุ่น</p>
+              <p className="font-medium text-gray-900">{result.model || "-"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">หมายเลขซีเรียล</p>
+              <p className="font-medium text-gray-900">{result.serialNumber || "-"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">ราคา</p>
+              <p className="font-medium text-gray-900">{result.price ? `฿${Number(result.price).toLocaleString()}` : "-"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-gray-400 text-xs mb-1">วันที่ซื้อ</p>
+              <p className="font-medium text-gray-900">
+                {result.purchaseDate ? new Date(result.purchaseDate).toLocaleDateString("th-TH") : "-"}
+              </p>
+            </div>
+            {result.assignedTo && (
+              <div className="bg-blue-50 rounded-xl p-3 col-span-2">
+                <p className="text-blue-400 text-xs mb-1">👤 ผู้ถือครอง</p>
+                <p className="font-medium text-blue-900">{result.assignedTo}</p>
+                {result.assignedPhone && <p className="text-sm text-blue-600">📞 {result.assignedPhone}</p>}
+              </div>
+            )}
+            {result.description && (
+              <div className="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p className="text-gray-400 text-xs mb-1">รายละเอียด</p>
+                <p className="font-medium text-gray-900">{result.description}</p>
+              </div>
+            )}
+          </div>
+
+          <button onClick={() => { setResult(null); setManualCode(""); }}
+            className="btn-secondary w-full text-sm">
+            🔄 สแกนรหัสใหม่
+          </button>
         </div>
       )}
-    </div>
-
-    <button
-      onClick={() => { setResult(null); setManualCode(""); }}
-      className="btn-secondary w-full text-sm"
-    >
-      🔄 สแกนรหัสใหม่
-    </button>
-  </div>
-)}
-      
     </div>
   );
 }

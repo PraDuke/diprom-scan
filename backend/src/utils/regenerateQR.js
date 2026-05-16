@@ -24,8 +24,7 @@ async function regenerateAllQR() {
   for (const asset of assets) {
     try {
       const qrPath = path.join(qrDir, `${asset.code}.png`);
-    const qrContent = `${BASE_URL}/dashboard/scanner?code=${asset.code}`;
-
+    const qrContent = `${BASE_URL}/scan?code=${asset.code}`;
       await QRCode.toFile(qrPath, qrContent, { width: 300 });
 
       await prisma.asset.update({

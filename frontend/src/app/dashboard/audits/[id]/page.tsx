@@ -1,13 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
-const CONDITION_LABELS: Record<string, string> = {
-  "ดี": "ดี", "ชำรุด": "ชำรุด", "สูญหาย": "สูญหาย"
-};
 const CONDITION_COLORS: Record<string, string> = {
   "ดี": "bg-green-100 text-green-700",
   "ชำรุด": "bg-yellow-100 text-yellow-700",
@@ -34,7 +31,6 @@ function ConfirmModal({ open, title, message, onConfirm, onCancel, confirmText =
   );
 }
 
-// Modal สแกน/บันทึกผล
 function ScanResultModal({ open, asset, onSave, onCancel }: any) {
   const [note, setNote] = useState("");
   const [condition, setCondition] = useState("ดี");
@@ -42,10 +38,7 @@ function ScanResultModal({ open, asset, onSave, onCancel }: any) {
   const [imagePreview, setImagePreview] = useState("");
   const [isMobile, setIsMobile] = useState(false);
 
-  useEffect(() => {
-    setIsMobile(/iPhone|iPad|Android/i.test(navigator.userAgent));
-  }, []);
-
+  useEffect(() => { setIsMobile(/iPhone|iPad|Android/i.test(navigator.userAgent)); }, []);
   useEffect(() => {
     if (open) { setNote(""); setCondition("ดี"); setImageFile(null); setImagePreview(""); }
   }, [open]);
@@ -62,28 +55,22 @@ function ScanResultModal({ open, asset, onSave, onCancel }: any) {
           <p className="font-mono text-xs text-gray-400">{asset.code}</p>
         </div>
         <div className="p-5 space-y-4">
-          {/* สภาพ */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">สภาพครุภัณฑ์</label>
             <div className="flex gap-2">
               {["ดี", "ชำรุด", "สูญหาย"].map(c => (
-                <button key={c} type="button"
-                  onClick={() => setCondition(c)}
+                <button key={c} type="button" onClick={() => setCondition(c)}
                   className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${condition === c ? CONDITION_COLORS[c] + " border-current" : "border-gray-200 text-gray-500"}`}>
                   {c}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* หมายเหตุ */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
             <textarea value={note} onChange={e => setNote(e.target.value)}
               rows={2} className="input resize-none" placeholder="หมายเหตุเพิ่มเติม..." />
           </div>
-
-          {/* รูปถ่ายตอนตรวจ */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">รูปถ่ายตอนตรวจ</label>
             {imagePreview && (
@@ -102,7 +89,6 @@ function ScanResultModal({ open, asset, onSave, onCancel }: any) {
                 }} />
             </label>
           </div>
-
           <div className="flex gap-3 pt-2">
             <button onClick={onCancel} className="btn-secondary flex-1">ยกเลิก</button>
             <button onClick={() => onSave({ note, condition, imageFile })}
@@ -122,16 +108,14 @@ export default function AuditDetailPage() {
   const [filter, setFilter] = useState<"all" | "found" | "pending">("all");
   const [scanResult, setScanResult] = useState<{ asset: any } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-
   const [modal, setModal] = useState<any>({ open: false });
+
   const showConfirm = (title: string, message: string, onConfirm: () => void, confirmText = "ยืนยัน", danger = false) => {
     setModal({ open: true, title, message, onConfirm, confirmText, danger });
   };
   const closeModal = () => setModal((m: any) => ({ ...m, open: false }));
 
-  useEffect(() => {
-    setIsMobile(/iPhone|iPad|Android/i.test(navigator.userAgent));
-  }, []);
+  useEffect(() => { setIsMobile(/iPhone|iPad|Android/i.test(navigator.userAgent)); }, []);
 
   const fetchAudit = async () => {
     try {
@@ -143,30 +127,49 @@ export default function AuditDetailPage() {
 
   useEffect(() => { fetchAudit(); }, [id]);
 
-  // สแกนด้วยกล้อง (Desktop)
-  const handleDesktopScan = () => {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = "กรอกรหัส QR...";
-    // ใช้ manual code แทน (Desktop ใช้ scanner เดิม)
-  };
-
-  // สแกนด้วยรูป (Mobile)
+  // สแกนด้วยรูป (jsQR)
   const handleMobileScan = async (file: File) => {
-    const { Html5Qrcode } = await import("html5-qrcode");
-    const scanner = new Html5Qrcode("qr-file-scan");
     try {
-      const result = await scanner.scanFile(file, true);
-      const code = result.includes("?code=") ? result.split("?code=")[1] : result;
-      // ค้นหา asset จาก code
+      const img = new window.Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise(resolve => { img.onload = resolve; });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(img.src);
+
+      const jsQR = (await import("jsqr")).default;
+      const qrResult = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (!qrResult) {
+        toast.error("อ่าน QR ไม่ได้ ลองถ่ายให้ใกล้และชัดขึ้น");
+        return;
+      }
+
+      const qrValue = qrResult.data;
+      const code = qrValue.includes("?code=") ? qrValue.split("?code=")[1] : qrValue;
       const { data } = await api.get(`/assets/scan/${code}`);
       setScanResult({ asset: data });
+
     } catch {
-      toast.error("อ่าน QR ไม่ได้ ลองใหม่");
+      toast.error("เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
     }
-    await scanner.clear();
   };
 
+  // ค้นหาด้วยรหัส manual
+  const handleManualLookup = async (code: string) => {
+    if (!code.trim()) return;
+    try {
+      const { data } = await api.get(`/assets/scan/${code.trim()}`);
+      setScanResult({ asset: data });
+    } catch { toast.error("ไม่พบครุภัณฑ์"); }
+  };
+
+  // บันทึกผลการตรวจ
   const handleSaveResult = async ({ note, condition, imageFile }: any) => {
     if (!scanResult) return;
     try {
@@ -231,10 +234,7 @@ export default function AuditDetailPage() {
   const foundItems = allItems.filter((i: any) => i.found && !i.isPending);
   const pendingItems = allItems.filter((i: any) => i.isPending);
   const pct = allItems.length ? Math.round(foundItems.length / allItems.length * 100) : 0;
-
-  const filteredItems = filter === "found" ? foundItems
-    : filter === "pending" ? pendingItems
-    : allItems;
+  const filteredItems = filter === "found" ? foundItems : filter === "pending" ? pendingItems : allItems;
 
   return (
     <>
@@ -245,7 +245,6 @@ export default function AuditDetailPage() {
         onSave={handleSaveResult}
         onCancel={() => setScanResult(null)}
       />
-      <div id="qr-file-scan" className="hidden" />
 
       <div className="p-4 md:p-8">
         {/* Header */}
@@ -254,13 +253,10 @@ export default function AuditDetailPage() {
             <button onClick={() => router.back()} className="text-sm text-gray-400 hover:text-gray-600 mb-2 flex items-center gap-1">← กลับ</button>
             <h1 className="text-2xl font-bold text-gray-900">{audit.title}</h1>
             <p className="text-gray-500 text-sm mt-1">โดย {audit.createdBy?.name} · {new Date(audit.createdAt).toLocaleDateString("th-TH")}</p>
-            {/* ผู้รับผิดชอบ */}
             {audit.assignedUsers?.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {audit.assignedUsers.map((a: any) => (
-                  <span key={a.id} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                    👤 {a.user.name}
-                  </span>
+                  <span key={a.id} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">👤 {a.user.name}</span>
                 ))}
               </div>
             )}
@@ -294,60 +290,56 @@ export default function AuditDetailPage() {
         </div>
 
         {/* Scanner */}
-        {!audit.isCompleted && (
-          <div className="card mb-6">
-            <h2 className="font-semibold text-gray-900 mb-3">สแกนครุภัณฑ์</h2>
-            {isMobile ? (
-              <label className="btn-primary w-full py-3 text-center cursor-pointer block">
-                📷 ถ่ายรูป QR Code
-                <input type="file" accept="image/*" capture="environment" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleMobileScan(f); e.target.value = ""; }} />
-              </label>
-            ) : (
-              <div className="flex gap-3">
-                <input id="manual-code" className="input flex-1" placeholder="กรอกรหัส QR เช่น DIPROM-XXXXXXXX"
-                  onKeyDown={async (e) => {
-                    if (e.key !== "Enter") return;
-                    const code = (e.target as HTMLInputElement).value.trim();
-                    if (!code) return;
-                    try {
-                      const { data } = await api.get(`/assets/scan/${code}`);
-                      setScanResult({ asset: data });
-                      (e.target as HTMLInputElement).value = "";
-                    } catch { toast.error("ไม่พบครุภัณฑ์"); }
-                  }} />
-                <button className="btn-primary px-4"
-                  onClick={async () => {
-                    const input = document.getElementById("manual-code") as HTMLInputElement;
-                    const code = input?.value.trim();
-                    if (!code) return;
-                    try {
-                      const { data } = await api.get(`/assets/scan/${code}`);
-                      setScanResult({ asset: data });
-                      input.value = "";
-                    } catch { toast.error("ไม่พบครุภัณฑ์"); }
-                  }}>ค้นหา</button>
-              </div>
-            )}
-          </div>
-        )}
+{!audit.isCompleted && (
+  <div className="card mb-6">
+    <h2 className="font-semibold text-gray-900 mb-3">สแกนครุภัณฑ์</h2>
+
+    {/* ปุ่มถ่ายรูป/อัปโหลด — แสดงเสมอ */}
+    <label className="btn-primary w-full py-3 text-center cursor-pointer block mb-3">
+      📷 ถ่ายรูป / อัปโหลด QR Code
+      <input type="file" accept="image/*" className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) handleMobileScan(f);
+          e.target.value = "";
+        }} />
+    </label>
+
+    {/* กรอกรหัส manual */}
+    <div className="flex gap-3">
+      <input id="manual-code" className="input flex-1"
+        placeholder="หรือกรอกรหัส เช่น DIPROM-XXXXXXXX"
+        onKeyDown={e => {
+          if (e.key !== "Enter") return;
+          const code = (e.target as HTMLInputElement).value;
+          handleManualLookup(code);
+          (e.target as HTMLInputElement).value = "";
+        }} />
+      <button className="btn-primary px-4"
+        onClick={() => {
+          const input = document.getElementById("manual-code") as HTMLInputElement;
+          handleManualLookup(input?.value);
+          if (input) input.value = "";
+        }}>ค้นหา</button>
+    </div>
+  </div>
+)}
 
         {/* Filter Tabs */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 flex-wrap">
           {[
             { key: "all", label: `ทั้งหมด (${allItems.length})` },
             { key: "found", label: `✓ ตรวจแล้ว (${foundItems.length})` },
             { key: "pending", label: `✗ ยังไม่ตรวจ (${pendingItems.length})` },
           ].map(tab => (
-            <button key={tab.key}
-              onClick={() => setFilter(tab.key as any)}
+            <button key={tab.key} onClick={() => setFilter(tab.key as any)}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition ${filter === tab.key ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Items List */}
+        {/* Items Table */}
         <div className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -364,14 +356,11 @@ export default function AuditDetailPage() {
                 )}
                 {filteredItems.map((item: any) => (
                   <tr key={item.id} className={`hover:bg-gray-50 ${item.isPending ? "opacity-60" : ""}`}>
-                    {/* รูปสิ่งของ */}
                     <td className="px-3 py-3">
                       {item.imageUrl ? (
-                        <img src={`${API_BASE}${item.imageUrl}`} alt="audit"
-                          className="w-10 h-10 rounded-lg object-cover border" />
+                        <img src={`${API_BASE}${item.imageUrl}`} alt="audit" className="w-10 h-10 rounded-lg object-cover border" />
                       ) : item.asset.imageUrl ? (
-                        <img src={`${API_BASE}${item.asset.imageUrl}`} alt={item.asset.name}
-                          className="w-10 h-10 rounded-lg object-cover border opacity-50" />
+                        <img src={`${API_BASE}${item.asset.imageUrl}`} alt={item.asset.name} className="w-10 h-10 rounded-lg object-cover border opacity-50" />
                       ) : (
                         <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
                           <span className="text-gray-300 text-xs">ไม่มีรูป</span>
@@ -393,9 +382,7 @@ export default function AuditDetailPage() {
                     </td>
                     <td className="px-3 py-3">
                       {item.condition ? (
-                        <span className={`badge text-xs ${CONDITION_COLORS[item.condition] || "bg-gray-100 text-gray-600"}`}>
-                          {item.condition}
-                        </span>
+                        <span className={`badge text-xs ${CONDITION_COLORS[item.condition] || "bg-gray-100 text-gray-600"}`}>{item.condition}</span>
                       ) : <span className="text-gray-300 text-xs">-</span>}
                     </td>
                     <td className="px-3 py-3 text-gray-500 text-xs max-w-[120px] truncate">{item.note || "-"}</td>
@@ -407,12 +394,8 @@ export default function AuditDetailPage() {
                         <button onClick={() => handleDeleteItem(item.id, item.asset.name)}
                           className="text-red-400 hover:text-red-600 text-xs">🗑️</button>
                       ) : !audit.isCompleted ? (
-                        <button onClick={async () => {
-                          try {
-                            const { data } = await api.get(`/assets/scan/${item.asset.code}`);
-                            setScanResult({ asset: data });
-                          } catch { toast.error("เกิดข้อผิดพลาด"); }
-                        }} className="text-blue-500 hover:text-blue-700 text-xs font-medium">
+                        <button onClick={() => handleManualLookup(item.asset.code)}
+                          className="text-blue-500 hover:text-blue-700 text-xs font-medium whitespace-nowrap">
                           + ตรวจ
                         </button>
                       ) : null}
